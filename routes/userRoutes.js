@@ -1,20 +1,24 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
+const leven = require("leven");
 const UserModel = require("../models/userModel");
+
 const UserRouter = express.Router();
+const SIMILARITY_THRESHOLD = 5;
 
+// Hash fingerprint before saving
 async function hashFingerprint(fingerprint) {
-    const saltRounds = 10;
-    return await bcrypt.hash(fingerprint, saltRounds);
+    return await bcrypt.hash(fingerprint, 10);
 }
 
+// Flexible fingerprint matching
 async function compareFingerprints(inputFingerprint, storedFingerprint) {
-    return await bcrypt.compare(inputFingerprint, storedFingerprint);
-}
+    const isExactMatch = await bcrypt.compare(inputFingerprint, storedFingerprint);
+    if (isExactMatch) return true;
 
-// Normalize fingerprint before hashing
-function normalizeFingerprint(fingerprint) {
-    return fingerprint.trim().replace(/\s+/g, "").toLowerCase();
+    // Use Levenshtein distance as a fallback
+    const distance = leven(inputFingerprint, storedFingerprint);
+    return distance <= SIMILARITY_THRESHOLD;
 }
 
 UserRouter.get("/home", (req, res) => {
@@ -56,7 +60,7 @@ UserRouter.get("/home", (req, res) => {
                 });
 
                 return btoa(String.fromCharCode(...new Uint8Array(credential.rawId)))
-                    .substring(0, 30); // Trim fingerprint to reduce variations
+                    .substring(0, 30);
             } catch (err) {
                 alert("Fingerprint authentication failed!");
                 return null;
@@ -68,7 +72,7 @@ UserRouter.get("/home", (req, res) => {
             const fingerprintId = await getFingerprint();
             if (!fingerprintId) return;
 
-            const res = await fetch("/fingerprint-auth/register", {
+            const res = await fetch("http://localhost:5000/fingerprint-auth/register", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, fingerprintId }),
@@ -83,7 +87,7 @@ UserRouter.get("/home", (req, res) => {
             const fingerprintId = await getFingerprint();
             if (!fingerprintId) return;
 
-            const res = await fetch("/fingerprint-auth/checkuser", {
+            const res = await fetch("http://localhost:5000/fingerprint-auth/checkuser", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, fingerprintId }),
@@ -97,7 +101,7 @@ UserRouter.get("/home", (req, res) => {
             const fingerprintId = await getFingerprint();
             if (!fingerprintId) return;
 
-            const res = await fetch("/fingerprint-auth/findwho", {
+            const res = await fetch("http://localhost:5000/fingerprint-auth/findwho", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ fingerprintId }),
@@ -125,9 +129,7 @@ UserRouter.post("/register", async (req, res) => {
             return res.status(400).json({ message: "Email already registered" });
         }
 
-        const normalizedFingerprint = normalizeFingerprint(fingerprintId);
-        const hashedFingerprint = await hashFingerprint(normalizedFingerprint);
-
+        const hashedFingerprint = await hashFingerprint(fingerprintId);
         const newUser = new UserModel({ email, fingerprint: hashedFingerprint });
         await newUser.save();
 
@@ -151,8 +153,7 @@ UserRouter.post("/checkuser", async (req, res) => {
             return res.status(401).json({ message: "Authentication failed" });
         }
 
-        const normalizedFingerprint = normalizeFingerprint(fingerprintId);
-        const isMatch = await compareFingerprints(normalizedFingerprint, user.fingerprint);
+        const isMatch = await compareFingerprints(fingerprintId, user.fingerprint);
 
         if (!isMatch) {
             return res.status(401).json({ message: "Authentication failed" });
@@ -173,21 +174,21 @@ UserRouter.post("/findwho", async (req, res) => {
 
     try {
         const users = await UserModel.find();
-        const normalizedFingerprint = normalizeFingerprint(fingerprintId);
+        let matchedUser = null;
 
-        const matchPromises = users.map(async (user) => {
-            const isMatch = await compareFingerprints(normalizedFingerprint, user.fingerprint);
-            return isMatch ? user.email : null;
-        });
-
-        const results = await Promise.all(matchPromises);
-        const matchedUser = results.find((email) => email !== null);
+        for (const user of users) {
+            const isMatch = await compareFingerprints(fingerprintId, user.fingerprint);
+            if (isMatch) {
+                matchedUser = user;
+                break;
+            }
+        }
 
         if (!matchedUser) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        res.json({ message: `User found: ${matchedUser}` });
+        res.json({ message: `User found: ${matchedUser.email}` });
     } catch (error) {
         res.status(500).json({ message: "Internal server error", error });
     }
