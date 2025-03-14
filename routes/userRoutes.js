@@ -1,8 +1,20 @@
-const express= require("express");
-const UserModel= require("../models/userModel.js");
+const express = require("express");
+const bcrypt = require("bcrypt");
+const UserModel = require("./userRoutes.js");
 const UserRouter = express.Router();
 
-UserRouter.get("/home",(req,res)=>{
+
+async function hashFingerprint(fingerprint) {
+    const saltRounds = 10;
+    return await bcrypt.hash(fingerprint, saltRounds);
+}
+
+
+async function compareFingerprints(inputFingerprint, storedFingerprint) {
+    return await bcrypt.compare(inputFingerprint, storedFingerprint);
+}
+
+UserRouter.get("/home", (req, res) => {
     res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -40,7 +52,8 @@ UserRouter.get("/home",(req,res)=>{
                     }
                 });
 
-                return btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
+                return btoa(String.fromCharCode(...new Uint8Array(credential.rawId)))
+                    .substring(0, 30); // Trim fingerprint to reduce variations
             } catch (err) {
                 alert("Fingerprint authentication failed!");
                 return null;
@@ -52,10 +65,10 @@ UserRouter.get("/home",(req,res)=>{
             const fingerprintId = await getFingerprint();
             if (!fingerprintId) return;
 
-            const res = await fetch("https://fingerprint-voting-system.onrender.com/fingerprint-auth/register", {
+            const res = await fetch("http://localhost:3000/fingerprint-auth/register", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, fingerprint:fingerprintId }),
+                body: JSON.stringify({ email, fingerprintId }),
             });
 
             const data = await res.json();
@@ -67,10 +80,10 @@ UserRouter.get("/home",(req,res)=>{
             const fingerprintId = await getFingerprint();
             if (!fingerprintId) return;
 
-            const res = await fetch("https://fingerprint-voting-system.onrender.com/fingerprint-auth/checkuser", {
+            const res = await fetch("http://localhost:3000/fingerprint-auth/checkuser", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, fingerprint:fingerprintId }),
+                body: JSON.stringify({ email, fingerprintId }),
             });
 
             const data = await res.json();
@@ -81,10 +94,10 @@ UserRouter.get("/home",(req,res)=>{
             const fingerprintId = await getFingerprint();
             if (!fingerprintId) return;
 
-            const res = await fetch("https://fingerprint-voting-system.onrender.com/fingerprint-auth/findwho", {
+            const res = await fetch("http://localhost:3000/fingerprint-auth/findwho", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, fingerprint:fingerprintId }),
+                body: JSON.stringify({ fingerprintId }),
             });
 
             const data = await res.json();
@@ -92,14 +105,13 @@ UserRouter.get("/home",(req,res)=>{
         }
     </script>
 </body>
-</html>`)
-})
-
+</html>`);
+});
 
 UserRouter.post("/register", async (req, res) => {
-    const { email, fingerprint } = req.body;
+    const { email, fingerprintId } = req.body;
 
-    if (!email || !fingerprint) {
+    if (!email || !fingerprintId) {
         return res.status(400).json({ message: "Email and fingerprint are required" });
     }
 
@@ -110,7 +122,8 @@ UserRouter.post("/register", async (req, res) => {
             return res.status(400).json({ message: "Email already registered" });
         }
 
-        const newUser = new UserModel({ email, fingerprint });
+        const hashedFingerprint = await hashFingerprint(fingerprintId);
+        const newUser = new UserModel({ email, fingerprint: hashedFingerprint });
         await newUser.save();
 
         res.status(201).json({ message: "User registered successfully" });
@@ -119,18 +132,23 @@ UserRouter.post("/register", async (req, res) => {
     }
 });
 
-
 UserRouter.post("/checkuser", async (req, res) => {
-    const { email, fingerprint } = req.body;
+    const { email, fingerprintId } = req.body;
 
-    if (!email || !fingerprint) {
+    if (!email || !fingerprintId) {
         return res.status(400).json({ message: "Email and fingerprint are required" });
     }
 
     try {
-        const user = await UserModel.findOne({ email, fingerprint });
+        const user = await UserModel.findOne({ email });
 
         if (!user) {
+            return res.status(401).json({ message: "Authentication failed" });
+        }
+
+        const isMatch = await compareFingerprints(fingerprintId, user.fingerprint);
+
+        if (!isMatch) {
             return res.status(401).json({ message: "Authentication failed" });
         }
 
@@ -140,26 +158,33 @@ UserRouter.post("/checkuser", async (req, res) => {
     }
 });
 
-
 UserRouter.post("/findwho", async (req, res) => {
-    const { fingerprint } = req.body;
+    const { fingerprintId } = req.body;
 
-    if (!fingerprint) {
+    if (!fingerprintId) {
         return res.status(400).json({ message: "Fingerprint is required" });
     }
 
     try {
-        const user = await UserModel.findOne({ fingerprint });
+        const users = await UserModel.find(); // Get all users
+        let matchedUser = null;
 
-        if (!user) {
+        for (const user of users) {
+            const isMatch = await compareFingerprints(fingerprintId, user.fingerprint);
+            if (isMatch) {
+                matchedUser = user;
+                break;
+            }
+        }
+
+        if (!matchedUser) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        res.json({ message: `User found: ${user.email}` });
+        res.json({ message: `User found: ${matchedUser.email}` });
     } catch (error) {
         res.status(500).json({ message: "Internal server error", error });
     }
 });
 
-
-module.exports=UserRouter;
+module.exports = UserRouter;
