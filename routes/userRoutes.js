@@ -1,6 +1,8 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
-const leven = require("leven");
+import("leven").then((leven) => {
+    global.leven = leven.default;
+});
 const UserModel = require("../models/userModel");
 
 const UserRouter = express.Router();
