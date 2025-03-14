@@ -20,6 +20,7 @@ async function compareFingerprints(inputFingerprint, storedFingerprint) {
 
     // Use Levenshtein distance as a fallback
     const distance = leven(inputFingerprint, storedFingerprint);
+    console.log(distance)
     return distance <= SIMILARITY_THRESHOLD;
 }
 
@@ -119,7 +120,7 @@ UserRouter.get("/home", (req, res) => {
 
 UserRouter.post("/register", async (req, res) => {
     const { email, fingerprintId } = req.body;
-
+    console.log(`${email}`,fingerprintId)
     if (!email || !fingerprintId) {
         return res.status(400).json({ message: "Email and fingerprint are required" });
     }
