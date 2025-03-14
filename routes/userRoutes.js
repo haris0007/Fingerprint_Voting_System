@@ -3,15 +3,18 @@ const bcrypt = require("bcrypt");
 const UserModel = require("../models/userModel");
 const UserRouter = express.Router();
 
-
 async function hashFingerprint(fingerprint) {
     const saltRounds = 10;
     return await bcrypt.hash(fingerprint, saltRounds);
 }
 
-
 async function compareFingerprints(inputFingerprint, storedFingerprint) {
     return await bcrypt.compare(inputFingerprint, storedFingerprint);
+}
+
+// Normalize fingerprint before hashing
+function normalizeFingerprint(fingerprint) {
+    return fingerprint.trim().replace(/\s+/g, "").toLowerCase();
 }
 
 UserRouter.get("/home", (req, res) => {
@@ -65,7 +68,7 @@ UserRouter.get("/home", (req, res) => {
             const fingerprintId = await getFingerprint();
             if (!fingerprintId) return;
 
-            const res = await fetch("https://fingerprint-voting-system.onrender.com/fingerprint-auth/register", {
+            const res = await fetch("/fingerprint-auth/register", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, fingerprintId }),
@@ -80,7 +83,7 @@ UserRouter.get("/home", (req, res) => {
             const fingerprintId = await getFingerprint();
             if (!fingerprintId) return;
 
-            const res = await fetch("https://fingerprint-voting-system.onrender.com/fingerprint-auth/checkuser", {
+            const res = await fetch("/fingerprint-auth/checkuser", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, fingerprintId }),
@@ -94,7 +97,7 @@ UserRouter.get("/home", (req, res) => {
             const fingerprintId = await getFingerprint();
             if (!fingerprintId) return;
 
-            const res = await fetch("https://fingerprint-voting-system.onrender.com/fingerprint-auth/findwho", {
+            const res = await fetch("/fingerprint-auth/findwho", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ fingerprintId }),
@@ -122,7 +125,9 @@ UserRouter.post("/register", async (req, res) => {
             return res.status(400).json({ message: "Email already registered" });
         }
 
-        const hashedFingerprint = await hashFingerprint(fingerprintId);
+        const normalizedFingerprint = normalizeFingerprint(fingerprintId);
+        const hashedFingerprint = await hashFingerprint(normalizedFingerprint);
+
         const newUser = new UserModel({ email, fingerprint: hashedFingerprint });
         await newUser.save();
 
@@ -146,7 +151,8 @@ UserRouter.post("/checkuser", async (req, res) => {
             return res.status(401).json({ message: "Authentication failed" });
         }
 
-        const isMatch = await compareFingerprints(fingerprintId, user.fingerprint);
+        const normalizedFingerprint = normalizeFingerprint(fingerprintId);
+        const isMatch = await compareFingerprints(normalizedFingerprint, user.fingerprint);
 
         if (!isMatch) {
             return res.status(401).json({ message: "Authentication failed" });
@@ -166,22 +172,22 @@ UserRouter.post("/findwho", async (req, res) => {
     }
 
     try {
-        const users = await UserModel.find(); // Get all users
-        let matchedUser = null;
+        const users = await UserModel.find();
+        const normalizedFingerprint = normalizeFingerprint(fingerprintId);
 
-        for (const user of users) {
-            const isMatch = await compareFingerprints(fingerprintId, user.fingerprint);
-            if (isMatch) {
-                matchedUser = user;
-                break;
-            }
-        }
+        const matchPromises = users.map(async (user) => {
+            const isMatch = await compareFingerprints(normalizedFingerprint, user.fingerprint);
+            return isMatch ? user.email : null;
+        });
+
+        const results = await Promise.all(matchPromises);
+        const matchedUser = results.find((email) => email !== null);
 
         if (!matchedUser) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        res.json({ message: `User found: ${matchedUser.email}` });
+        res.json({ message: `User found: ${matchedUser}` });
     } catch (error) {
         res.status(500).json({ message: "Internal server error", error });
     }
