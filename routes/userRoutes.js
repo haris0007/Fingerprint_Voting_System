@@ -1,5 +1,5 @@
 const express= require("express");
-const UserModel= require("./userRoutes.js");
+const UserModel= require("../models/userModel.js");
 const UserRouter = express.Router();
 
 UserRouter.get("/home",(req,res)=>{
