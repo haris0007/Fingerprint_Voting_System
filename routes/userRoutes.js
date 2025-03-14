@@ -65,7 +65,7 @@ UserRouter.get("/home", (req, res) => {
             const fingerprintId = await getFingerprint();
             if (!fingerprintId) return;
 
-            const res = await fetch("http://localhost:3000/fingerprint-auth/register", {
+            const res = await fetch("https://fingerprint-voting-system.onrender.com/fingerprint-auth/register", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, fingerprintId }),
@@ -80,7 +80,7 @@ UserRouter.get("/home", (req, res) => {
             const fingerprintId = await getFingerprint();
             if (!fingerprintId) return;
 
-            const res = await fetch("http://localhost:3000/fingerprint-auth/checkuser", {
+            const res = await fetch("https://fingerprint-voting-system.onrender.com/fingerprint-auth/checkuser", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, fingerprintId }),
@@ -94,7 +94,7 @@ UserRouter.get("/home", (req, res) => {
             const fingerprintId = await getFingerprint();
             if (!fingerprintId) return;
 
-            const res = await fetch("http://localhost:3000/fingerprint-auth/findwho", {
+            const res = await fetch("https://fingerprint-voting-system.onrender.com/fingerprint-auth/findwho", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ fingerprintId }),
