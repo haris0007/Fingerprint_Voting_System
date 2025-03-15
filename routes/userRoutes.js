@@ -130,7 +130,8 @@ UserRouter.post("/register", async (req, res) => {
 
         res.status(201).json({ message: "User registered successfully" });
     } catch (error) {
-        res.status(500).json({ message: "Internal server error", error });
+        console.log(error.message)
+        res.status(500).json({ message: "Internal server error", error:error.message });
     }
 });
 
