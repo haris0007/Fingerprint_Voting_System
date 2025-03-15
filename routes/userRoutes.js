@@ -83,7 +83,7 @@ UserRouter.get("/home", (req, res) => {
             const fingerprintId = await getFingerprint();
             if (!fingerprintId) return;
 
-            const res = await fetch("/fingerprint-auth/checkuser", {
+            const res = await fetch("/fingerprint-auth/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, fingerprint:fingerprintId }),
