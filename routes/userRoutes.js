@@ -1,5 +1,5 @@
 const express = require("express");
-const bcrypt = require("bcrypt");
+const crypto = require("crypto");
 import("leven").then((leven) => {
     global.leven = leven.default;
 });
