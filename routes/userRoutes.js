@@ -14,6 +14,7 @@ function hashFingerprint(fingerprint) {
 function isSimilarFingerprint(inputFingerprint, storedFingerprint) {
     const distance = leven(inputFingerprint, storedFingerprint);
     const similarity = ((Math.max(inputFingerprint.length, storedFingerprint.length) - distance) / Math.max(inputFingerprint.length, storedFingerprint.length)) * 100;
+    console.log(similarity)
     return similarity > 85; // Allow 85% similarity
 }
 UserRouter.get("/home", (req, res) => {
@@ -158,6 +159,40 @@ UserRouter.post("/login", async (req, res) => {
         res.status(500).json({ message: "Internal server error", error });
     }
 });
+
+UserRouter.post("/fingerprint-auth/findwho", async (req, res) => {
+    try {
+        const { fingerprintId } = req.body;
+        if (!fingerprintId) {
+            return res.status(400).json({ success: false, message: "Fingerprint data is required." });
+        }
+
+        // Fetch all users and find the closest match
+        const users = await User.find();
+        let bestMatch = null;
+        let bestScore = 0;
+
+        users.forEach(user => {
+            const similarityScore = leven(fingerprintId, user.fingerprintId);
+            const matchPercentage = ((1 - similarityScore / Math.max(fingerprintId.length, user.fingerprintId.length)) * 100);
+
+            if (matchPercentage > bestScore) {
+                bestScore = matchPercentage;
+                bestMatch = user;
+            }
+        });
+
+        if (bestScore >= 85) { // Accept if similarity is 85% or more
+            return res.json({ success: true, message: `User found: ${bestMatch.email}` });
+        } else {
+            return res.json({ success: false, message: "No matching user found." });
+        }
+    } catch (error) {
+        console.error("Error in /findwho:", error);
+        res.status(500).json({ success: false, message: "Internal Server Error" });
+    }
+});
+
 
 module.exports=UserRouter;
 
