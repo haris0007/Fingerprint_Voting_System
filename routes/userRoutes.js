@@ -18,6 +18,7 @@ function isSimilarFingerprint(inputFingerprint, storedFingerprint) {
     if (!leven) return false; // Ensure leven is loaded
     const distance = leven(inputFingerprint, storedFingerprint);
     const similarity = ((Math.max(inputFingerprint.length, storedFingerprint.length) - distance) / Math.max(inputFingerprint.length, storedFingerprint.length)) * 100;
+    console.log(similarity);
     return similarity > 85; // 85% threshold
 }
 
