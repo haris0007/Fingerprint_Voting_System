@@ -12,6 +12,7 @@ function hashFingerprint(fingerprint) {
 
 // Function to compute similarity between fingerprints
 function isSimilarFingerprint(inputFingerprint, storedFingerprint) {
+    console.log("hi")
     const distance = leven(inputFingerprint, storedFingerprint);
     const similarity = ((Math.max(inputFingerprint.length, storedFingerprint.length) - distance) / Math.max(inputFingerprint.length, storedFingerprint.length)) * 100;
     console.log(similarity)
@@ -163,8 +164,8 @@ UserRouter.post("/login", async (req, res) => {
 
 UserRouter.post("/findwho", async (req, res) => {
     try {
-        const { fingerprintId } = req.body;
-        if (!fingerprintId) {
+        const { fingerprint } = req.body;
+        if (!fingerprint) {
             return res.status(400).json({ success: false, message: "Fingerprint data is required." });
         }
 
@@ -174,8 +175,8 @@ UserRouter.post("/findwho", async (req, res) => {
         let bestScore = 0;
 
         users.forEach(user => {
-            const similarityScore = leven(fingerprintId, user.fingerprintId);
-            const matchPercentage = ((1 - similarityScore / Math.max(fingerprintId.length, user.fingerprintId.length)) * 100);
+            const similarityScore = leven(fingerprint, user.fingerprint);
+            const matchPercentage = ((1 - similarityScore / Math.max(fingerprint.length, user.fingerprint.length)) * 100);
 
             if (matchPercentage > bestScore) {
                 bestScore = matchPercentage;
