@@ -71,7 +71,7 @@ UserRouter.get("/home", (req, res) => {
             const res = await fetch("/fingerprint-auth/register", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, fingerprintId }),
+                body: JSON.stringify({ email, fingerprint:fingerprintId }),
             });
 
             const data = await res.json();
@@ -86,7 +86,7 @@ UserRouter.get("/home", (req, res) => {
             const res = await fetch("/fingerprint-auth/checkuser", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, fingerprintId }),
+                body: JSON.stringify({ email, fingerprint:fingerprintId }),
             });
 
             const data = await res.json();
@@ -100,7 +100,7 @@ UserRouter.get("/home", (req, res) => {
             const res = await fetch("/fingerprint-auth/findwho", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ fingerprintId }),
+                body: JSON.stringify({ fingerprint:fingerprintId }),
             });
 
             const data = await res.json();
