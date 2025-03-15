@@ -1,23 +1,26 @@
 const express = require("express");
 const crypto = require("crypto");
-import("leven").then((leven) => {
-    global.leven = leven.default;
-});
 const UserModel = require("../models/userModel");
 
 const UserRouter = express.Router();
+
+let leven; // Declare leven globally
+import("leven").then((module) => {
+    leven = module.default;
+}).catch(console.error);
+
 function hashFingerprint(fingerprint) {
     return crypto.createHash("sha256").update(fingerprint).digest("hex");
 }
 
 // Function to compute similarity between fingerprints
 function isSimilarFingerprint(inputFingerprint, storedFingerprint) {
-    console.log("hi")
+    if (!leven) return false; // Ensure leven is loaded
     const distance = leven(inputFingerprint, storedFingerprint);
     const similarity = ((Math.max(inputFingerprint.length, storedFingerprint.length) - distance) / Math.max(inputFingerprint.length, storedFingerprint.length)) * 100;
-    console.log(similarity)
-    return similarity > 85; // Allow 85% similarity
+    return similarity > 85; // 85% threshold
 }
+
 UserRouter.get("/home", (req, res) => {
     res.send(`<!DOCTYPE html>
 <html lang="en">
@@ -56,8 +59,7 @@ UserRouter.get("/home", (req, res) => {
                     }
                 });
 
-                return btoa(String.fromCharCode(...new Uint8Array(credential.rawId)))
-                    .substring(0, 30); // Trim fingerprint to reduce variations
+                return btoa(String.fromCharCode(...new Uint8Array(credential.rawId)));
             } catch (err) {
                 alert("Fingerprint authentication failed!");
                 return null;
@@ -72,7 +74,7 @@ UserRouter.get("/home", (req, res) => {
             const res = await fetch("/fingerprint-auth/register", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, fingerprint:fingerprintId }),
+                body: JSON.stringify({ email, fingerprint: fingerprintId }),
             });
 
             const data = await res.json();
@@ -87,7 +89,7 @@ UserRouter.get("/home", (req, res) => {
             const res = await fetch("/fingerprint-auth/login", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ email, fingerprint:fingerprintId }),
+                body: JSON.stringify({ email, fingerprint: fingerprintId }),
             });
 
             const data = await res.json();
@@ -101,7 +103,7 @@ UserRouter.get("/home", (req, res) => {
             const res = await fetch("/fingerprint-auth/findwho", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ fingerprint:fingerprintId }),
+                body: JSON.stringify({ fingerprint: fingerprintId }),
             });
 
             const data = await res.json();
@@ -109,21 +111,18 @@ UserRouter.get("/home", (req, res) => {
         }
     </script>
 </body>
-</html>`);
+</html>
+`); // Serve HTML file
 });
 
 // Register Route
 UserRouter.post("/register", async (req, res) => {
     const { email, fingerprint } = req.body;
-    if (!email || !fingerprint) {
-        return res.status(400).json({ message: "Email and fingerprint are required" });
-    }
-    
+    if (!email || !fingerprint) return res.status(400).json({ message: "Email and fingerprint are required" });
+
     try {
         const existingUser = await UserModel.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ message: "Email already registered" });
-        }
+        if (existingUser) return res.status(400).json({ message: "Email already registered" });
 
         const hashedFingerprint = hashFingerprint(fingerprint);
         const newUser = new UserModel({ email, fingerprint: hashedFingerprint });
@@ -131,30 +130,23 @@ UserRouter.post("/register", async (req, res) => {
 
         res.status(201).json({ message: "User registered successfully" });
     } catch (error) {
-        console.log(error.message)
-        res.status(500).json({ message: "Internal server error", error:error.message });
+        res.status(500).json({ message: "Internal server error", error: error.message });
     }
 });
 
 // Login Route
 UserRouter.post("/login", async (req, res) => {
     const { email, fingerprint } = req.body;
-    if (!email || !fingerprint) {
-        return res.status(400).json({ message: "Email and fingerprint are required" });
-    }
+    if (!email || !fingerprint) return res.status(400).json({ message: "Email and fingerprint are required" });
 
     try {
         const user = await UserModel.findOne({ email });
-        if (!user) {
-            return res.status(401).json({ message: "Authentication failed" });
-        }
+        if (!user) return res.status(401).json({ message: "Authentication failed" });
 
         const hashedInput = hashFingerprint(fingerprint);
         const isMatch = isSimilarFingerprint(hashedInput, user.fingerprint);
 
-        if (!isMatch) {
-            return res.status(401).json({ message: "Authentication failed" });
-        }
+        if (!isMatch) return res.status(401).json({ message: "Authentication failed" });
 
         res.json({ message: "Login successful" });
     } catch (error) {
@@ -162,29 +154,26 @@ UserRouter.post("/login", async (req, res) => {
     }
 });
 
+// Find Who Route
 UserRouter.post("/findwho", async (req, res) => {
     try {
         const { fingerprint } = req.body;
-        if (!fingerprint) {
-            return res.status(400).json({ success: false, message: "Fingerprint data is required." });
-        }
+        if (!fingerprint) return res.status(400).json({ success: false, message: "Fingerprint data is required." });
 
-        // Fetch all users and find the closest match
-        const users = await User.find();
+        const users = await UserModel.find();
         let bestMatch = null;
         let bestScore = 0;
 
         users.forEach(user => {
-            const similarityScore = leven(fingerprint, user.fingerprint);
-            const matchPercentage = ((1 - similarityScore / Math.max(fingerprint.length, user.fingerprint.length)) * 100);
+            const similarityScore = ((Math.max(fingerprint.length, user.fingerprint.length) - leven(fingerprint, user.fingerprint)) / Math.max(fingerprint.length, user.fingerprint.length)) * 100;
 
-            if (matchPercentage > bestScore) {
-                bestScore = matchPercentage;
+            if (similarityScore > bestScore) {
+                bestScore = similarityScore;
                 bestMatch = user;
             }
         });
 
-        if (bestScore >= 85) { // Accept if similarity is 85% or more
+        if (bestScore >= 85) {
             return res.json({ success: true, message: `User found: ${bestMatch.email}` });
         } else {
             return res.json({ success: false, message: "No matching user found." });
@@ -195,7 +184,7 @@ UserRouter.post("/findwho", async (req, res) => {
     }
 });
 
+module.exports = UserRouter;
 
-module.exports=UserRouter;
 
 
