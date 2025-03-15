@@ -161,7 +161,7 @@ UserRouter.post("/login", async (req, res) => {
     }
 });
 
-UserRouter.post("/fingerprint-auth/findwho", async (req, res) => {
+UserRouter.post("/findwho", async (req, res) => {
     try {
         const { fingerprintId } = req.body;
         if (!fingerprintId) {
